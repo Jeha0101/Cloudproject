@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - backend-data:/app/uploads
+    ports:
+      - "5000:5000"
+    depends_on:
+      - database
+  
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+
+  database:
+    image: mysql:8.0
+    container_name: my-database
+    environment:
+      MYSQL_ROOT_PASSWORD: qwerty
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: qwerty
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+volumes:
+  backend-data:
+  db-data:
+
