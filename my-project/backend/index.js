@@ -1,112 +1,71 @@
+// express 및 Socket.IO 초기화 코드
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { createRoom, joinRoom, getRoom, getRooms } = require('./rooms');
 const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+const apiRoutes = require('./routes/api'); // API 라우터 가져오기
+const socketHandler = require('./socket'); // 소켓 핸들러 가져오기
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3000" })); // 프론트엔드 URL (개발 시)
+app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
 
-// ======= API 엔드포인트 ======= //
+// API 라우터 등록
+app.use('/api', apiRoutes);
 
-// 방 생성 API
-app.post('/api/rooms', (req, res) => {
-  const { nickname } = req.body;
-  if (!nickname) {
-    return res.status(400).json({ error: "Nickname is required" });
-  }
-
-  const roomId = uuidv4();
-  createRoom(roomId, nickname);
-  console.log(`Room created: ${roomId} by ${nickname}`);
-  res.status(201).json({ roomId });
+// HTML 페이지 반환
+app.get('/', (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <title>Backend Server</title>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+          const socket = io();
+          socket.on('roomUpdate', (rooms) => {
+            const roomList = document.getElementById('rooms');
+            roomList.innerHTML = ''; // 기존 목록 초기화
+            for (const [roomId, room] of Object.entries(rooms)) {
+              const players = room.players.join(', ');
+              const listItem = document.createElement('li');
+              listItem.innerText = \`Room ID: \${roomId}, Host: \${room.host}, Players: [\${players}]\`;
+              roomList.appendChild(listItem);
+            }
+          });
+        </script>
+      </head>
+      <body>
+        <h1>Backend Server Dashboard</h1>
+        <h2>Active Rooms:</h2>
+        <ul id="rooms"></ul>
+      </body>
+    </html>
+  `);
 });
 
-// 방 참가 API
-app.post('/api/rooms/:roomId/join', (req, res) => {
-  const { roomId } = req.params;
-  const { nickname } = req.body;
-
-  if (!nickname) {
-    return res.status(400).json({ error: "Nickname is required" });
-  }
-
-  const result = joinRoom(roomId, nickname);
-  if (result.success) {
-    console.log(`${nickname} joined room: ${roomId}`);
-    res.json({ success: true });
-  } else {
-    console.error(`Failed to join room: ${result.error}`);
-    res.status(400).json({ error: result.error });
-  }
-});
-
-// 방 정보 조회 API
-app.get('/api/rooms/:roomId', (req, res) => {
-  const { roomId } = req.params;
-  const room = getRoom(roomId);
-  if (!room) {
-    console.error(`Room not found: ${roomId}`);
-    return res.status(404).json({ error: 'Room not found' });
-  }
-  res.json(room);
-});
-
-// 전체 방 목록 조회 API
-app.get('/api/rooms', (req, res) => {
-  const allRooms = getRooms();
-  const roomsArray = Object.entries(allRooms).map(([roomId, roomData]) => ({
-    roomId,
-    ...roomData,
-  }));
-  res.json({ rooms: roomsArray });
-});
-
-
-// ======= 소켓 설정 ======= //
+// 서버 및 소켓 설정
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3000", // 프론트엔드 주소
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] },
 });
 
+// 소켓 핸들러 초기화
+socketHandler(io);
+
+// 방 목록을 브로드캐스트하기 위한 예시 (디버깅용)
 io.on('connection', (socket) => {
-  const { roomId, nickname } = socket.handshake.query;
+  console.log('✅ A client connected:', socket.id);
 
-  if (!roomId || !nickname) {
-    console.error("Connection attempt failed: Missing roomId or nickname.");
-    socket.disconnect();
-    return;
-  }
-
-  console.log(`${nickname} connected to room: ${roomId}`);
-  socket.join(roomId);
-  io.to(roomId).emit('playerJoined', { nickname });
-
-  // 게임 시작 이벤트
-  socket.on('startGame', () => {
-    console.log(`Game started in room: ${roomId}`);
-    io.to(roomId).emit('gameStart');
-  });
-
-  // 플레이어 이동 이벤트
-  socket.on('playerMove', (data) => {
-    console.log(`Player ${nickname} moved in room: ${roomId}`);
-    socket.to(roomId).emit('playerMove', data);
-  });
-
-  // 연결 종료 이벤트
   socket.on('disconnect', () => {
-    console.log(`${nickname} disconnected from room: ${roomId}`);
+    console.log('❌ A client disconnected:', socket.id);
   });
+
+  // 테스트용 이벤트: 방 목록 업데이트
+  socket.emit('roomUpdate', {}); // 초기 방 목록 전달 (빈 객체로 시작)
 });
 
-// ======= 서버 실행 ======= //
+// 서버 시작
 const PORT = 5000;
 server.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
+  console.log(`✅ Backend server running on http://localhost:${PORT}`);
 });
