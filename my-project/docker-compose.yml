@@ -9,12 +9,21 @@ services:
       - "5000:5000"
     depends_on:
       - database
-  
+    environment:
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: qwerty
+      DATABASE_HOST: database
+    networks:
+      - app-network
+
   frontend:
     build:
       context: ./frontend
     ports:
       - "3000:80"
+    networks:
+      - app-network
 
   database:
     image: mysql:8.0
@@ -26,10 +35,16 @@ services:
       MYSQL_PASSWORD: qwerty
     volumes:
       - db-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "3306:3306"
+    networks:
+      - app-network
 
 volumes:
   backend-data:
   db-data:
 
+networks:
+  app-network:
+    driver: bridge
