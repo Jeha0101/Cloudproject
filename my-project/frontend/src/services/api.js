@@ -28,16 +28,8 @@ export async function getRoomInfo(roomId) {
 
 //전체 방 목록
 export async function fetchRooms() {
-  try {
-    const res = await fetch(`${BASE_URL}/rooms`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch rooms: ${res.status}`);
-    }
-    const data = await res.json();
-    console.log('API Response:', data); // 응답 확인
-    return data;
-  } catch (error) {
-    console.error('Error fetching rooms:', error);
-    return [];
-  }
+  const res = await fetch(`${BASE_URL}/rooms`);
+  const data = await res.json();
+  console.log('API Response:', data); // 응답 확인
+  return data; // 반환된 데이터를 프론트에 전달
 }

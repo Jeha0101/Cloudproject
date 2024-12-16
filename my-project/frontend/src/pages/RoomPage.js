@@ -1,59 +1,57 @@
-import React, { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getRoomInfo } from '../services/api';
+import io from 'socket.io-client';
 
-const socket = io('http://localhost:5000'); // 백엔드 주소
-
-function LobbyPage() {
-  const [rooms, setRooms] = useState([]); // 방 목록 상태
+function RoomPage() {
+  const { roomId } = useParams();
+  const [room, setRoom] = useState(null);
+  const [nickname, setNickname] = useState('게스트닉네임');
   const navigate = useNavigate();
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // 서버로부터 'roomUpdate' 이벤트 수신
-    socket.on('roomUpdate', (updatedRooms) => {
-      console.log(' 방 목록 업데이트:', updatedRooms);
-      setRooms(Object.entries(updatedRooms).map(([roomId, roomData]) => ({
-        roomId,
-        ...roomData,
-      })));
-    });
-
-    //중복 소켓 연결
-    if (!getSocket()) {
-      initSocket(roomId, nickname);
-    } else {
-      console.log('🔌 Socket already connected.');
+    async function fetchData() {
+      const data = await getRoomInfo(roomId);
+      setRoom(data);
     }
+    fetchData();
+  }, [roomId]);
 
-    // 컴포넌트 언마운트 시 리스너 제거
+  useEffect(() => {
+    // 대기실 입장 시 소켓 연결
+    const s = io('http://localhost:5000', {
+      query: { roomId, nickname }
+    });
+    s.on('gameStart', () => {
+      navigate(`/rooms/${roomId}/game`);
+    });
+    setSocket(s);
+
     return () => {
-      socket.off('roomUpdate');
+      s.disconnect();
     };
-  }, []);
+  }, [roomId, nickname, navigate]);
 
-  function handleJoinRoom(roomId) {
-    navigate(`/rooms/${roomId}`); // 선택한 방으로 이동
+  function handleStartGame() {
+    if (socket && room && room.host === nickname) {
+      socket.emit('startGame');
+    }
   }
 
   return (
-    <div>
-      <h1>방 목록</h1>
-      <ul>
-        {rooms.length > 0 ? (
-          rooms.map((room) => (
-            <li key={room.roomId}>
-              <strong>Room ID:</strong> {room.roomId} | 
-              <strong> Host:</strong> {room.host} | 
-              <strong> Players:</strong> {room.players.join(', ')}
-              <button onClick={() => handleJoinRoom(room.roomId)}>참가하기</button>
-            </li>
-          ))
-        ) : (
-          <p>아직 생성된 방이 없습니다.</p>
-        )}
-      </ul>
+    <div className="p-4">
+      <h1>대기실: {roomId}</h1>
+      {room && (
+        <div>
+          <p>호스트: {room.host}</p>
+          <p>참가자: {room.players.map(p => p.nickname).join(', ')}</p>
+        </div>
+      )}
+      <input value={nickname} onChange={e => setNickname(e.target.value)} placeholder="닉네임" />
+      <button onClick={handleStartGame}>게임 시작</button>
     </div>
   );
 }
 
-export default LobbyPage;
+export default RoomPage;
