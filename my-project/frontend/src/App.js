@@ -36,15 +36,6 @@ function App() {
             path='/game-results'
             element={<GameResultsPage />}
           />
-          <Route
-            path='*'
-            element={
-              <Navigate
-                to='/'
-                replace
-              />
-            }
-          />
         </Routes>
       </main>
     </div>

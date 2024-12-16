@@ -1,95 +1,32 @@
-// SnakeGame.jsx
-import React, { useState, useRef, useEffect } from "react";
-import { io } from "socket.io-client";
-import { useNavigate } from "react-router-dom";
 import SettingsModal from "../pages/SettingsModal";
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
-
-const SnakeGame = ({ roomId, nickname }) => {
+const SnakeGame = ({ roomId }) => {
   const canvasRef = useRef(null);
   const navigate = useNavigate();
-  const [socket, setSocket] = useState(null);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [settings, setSettings] = useState({
     tileSize: 20,
-    foodValue: 5,
-    foodAmount: 3,
-    startLength: 5,
     darkMode: false,
   });
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [participants, setParticipants] = useState([]);
-  const [food, setFood] = useState({ x: 15, y: 15 });
-  const [snakeData, setSnakeData] = useState({});
+  const [gameState, setGameState] = useState({
+    snakes: {
+      눈송이: { snake: [{ x: 5, y: 5 }], direction: "RIGHT", score: 0 },
+      눈결: { snake: [{ x: 15, y: 15 }], direction: "LEFT", score: 0 },
+    },
+    food: { x: 10, y: 10 },
+  });
   const animationRef = useRef(null);
-
-  // 소켓 연결 및 초기 설정
-  useEffect(() => {
-    const token = localStorage.getItem("token"); // JWT 토큰 저장 방식에 따라 수정
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    const s = io(SOCKET_URL, {
-      auth: { token },
-      query: { roomId },
-    });
-
-    s.on("connect_error", (err) => {
-      console.error("Socket connection error:", err.message);
-      navigate("/lobby");
-    });
-
-    s.on("playerJoined", (data) => {
-      setParticipants((prev) => [...prev, data]);
-      setSnakeData((prev) => ({
-        ...prev,
-        [data.nickname]: {
-          snake: [{ x: 10, y: 10 }],
-          direction: "RIGHT",
-        },
-      }));
-    });
-
-    s.on("playerLeft", (data) => {
-      setParticipants((prev) =>
-        prev.filter((p) => p.nickname !== data.nickname)
-      );
-      setSnakeData((prev) => {
-        const updated = { ...prev };
-        delete updated[data.nickname];
-        return updated;
-      });
-    });
-
-    s.on("gameStart", () => {
-      // 게임 시작 시 필요한 로직 추가
-    });
-
-    setSocket(s);
-
-    // 초기 자신의 뱀 상태 설정
-    setSnakeData((prev) => ({
-      ...prev,
-      [nickname]: {
-        snake: [{ x: 10, y: 10 }],
-        direction: "RIGHT",
-      },
-    }));
-
-    return () => {
-      if (s) s.disconnect();
-    };
-  }, [roomId, nickname, navigate]);
 
   // 게임 루프
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     const unit = settings.tileSize;
+    let lastTime = 0;
+    const speed = 100;
 
-    // 격자 그리기
     const drawGrid = () => {
       ctx.strokeStyle = "#ddd";
       for (let x = 0; x <= canvas.width / unit; x++) {
@@ -106,49 +43,44 @@ const SnakeGame = ({ roomId, nickname }) => {
       }
     };
 
-    // 참가자 그리기
-    const drawParticipants = () => {
-      participants.forEach((player, index) => {
-        const color = index % 2 === 0 ? "blue" : "purple";
+    const drawFood = () => {
+      ctx.fillStyle = "red";
+      ctx.fillRect(
+        gameState.food.x * unit,
+        gameState.food.y * unit,
+        unit,
+        unit
+      );
+    };
+
+    const drawSnakes = () => {
+      Object.entries(gameState.snakes).forEach(([name, snakeData]) => {
+        const color = name === "눈송이" ? "blue" : "purple";
         ctx.fillStyle = color;
-        player.snake.forEach((segment, idx) => {
+
+        // 뱀 그리기
+        snakeData.snake.forEach((segment) => {
           ctx.fillRect(segment.x * unit, segment.y * unit, unit, unit);
         });
+
+        // 닉네임 표시
         ctx.fillStyle = "white";
         ctx.font = "12px Arial";
-        ctx.fillText(
-          player.nickname,
-          player.snake[0].x * unit + unit / 4,
-          player.snake[0].y * unit + unit / 1.5
-        );
+        const head = snakeData.snake[0];
+        ctx.fillText(name, head.x * unit + 2, head.y * unit + unit - 2);
       });
     };
 
-    // 음식 그리기
-    const drawFood = () => {
-      ctx.fillStyle = "red";
-      ctx.fillRect(food.x * unit, food.y * unit, unit, unit);
-    };
-
-    // 게임 그리기
-    const drawGame = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = settings.darkMode ? "#222" : "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      drawGrid();
-      drawFood();
-      drawParticipants();
-    };
-
-    // 뱀 이동
     const moveSnakes = () => {
-      setSnakeData((prevData) => {
-        const newData = { ...prevData };
-        Object.keys(newData).forEach((player) => {
-          const { snake, direction } = newData[player];
-          const head = { ...snake[0] };
+      setGameState((prev) => {
+        const newSnakes = { ...prev.snakes };
+        let newFood = { ...prev.food };
 
-          switch (direction) {
+        Object.entries(newSnakes).forEach(([name, snakeData]) => {
+          const head = { ...snakeData.snake[0] };
+
+          // 이동
+          switch (snakeData.direction) {
             case "UP":
               head.y -= 1;
               break;
@@ -165,90 +97,88 @@ const SnakeGame = ({ roomId, nickname }) => {
               break;
           }
 
-          // 벗어나면 초기화
-          if (
-            head.x < 0 ||
-            head.y < 0 ||
-            head.x >= Math.floor(canvas.width / unit) ||
-            head.y >= Math.floor(canvas.height / unit)
-          ) {
-            newData[player] = {
-              snake: [{ x: 10, y: 10 }],
-              direction: "RIGHT",
-            };
-            return;
-          }
+          // 화면 경계 루프 처리
+          head.x =
+            (head.x + Math.floor(canvas.width / unit)) %
+            Math.floor(canvas.width / unit);
+          head.y =
+            (head.y + Math.floor(canvas.height / unit)) %
+            Math.floor(canvas.height / unit);
 
           // 음식 먹기
-          if (head.x === food.x && head.y === food.y) {
-            newData[player] = {
-              ...newData[player],
-              snake: [head, ...snake],
-            };
-            setFood({
+          if (head.x === prev.food.x && head.y === prev.food.y) {
+            snakeData.snake = [head, ...snakeData.snake];
+            snakeData.score += 1;
+
+            // 새 음식 생성
+            newFood = {
               x: Math.floor(Math.random() * (canvas.width / unit)),
               y: Math.floor(Math.random() * (canvas.height / unit)),
-            });
-          } else {
-            newData[player] = {
-              ...newData[player],
-              snake: [head, ...snake.slice(0, -1)],
             };
+          } else {
+            snakeData.snake = [head, ...snakeData.snake.slice(0, -1)];
           }
         });
-        return newData;
+
+        return { ...prev, snakes: newSnakes, food: newFood };
       });
     };
 
-    // 애니메이션 루프
-    const gameLoop = () => {
-      moveSnakes();
-      drawGame();
+    const drawGame = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = settings.darkMode ? "#222" : "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawGrid();
+      drawFood();
+      drawSnakes();
+    };
+
+    const gameLoop = (currentTime) => {
+      if (!lastTime) lastTime = currentTime;
+
+      const deltaTime = currentTime - lastTime;
+      if (deltaTime > speed) {
+        lastTime = currentTime;
+        moveSnakes();
+        drawGame();
+      }
+
       animationRef.current = requestAnimationFrame(gameLoop);
     };
 
-    // 게임 시작
     animationRef.current = requestAnimationFrame(gameLoop);
 
-    // 키보드 이벤트 핸들러
     const handleKeyDown = (e) => {
-      let newDirection;
-      switch (e.key) {
-        case "ArrowUp":
-          newDirection = "UP";
-          break;
-        case "ArrowDown":
-          newDirection = "DOWN";
-          break;
-        case "ArrowLeft":
-          newDirection = "LEFT";
-          break;
-        case "ArrowRight":
-          newDirection = "RIGHT";
-          break;
-        default:
-          return;
-      }
-
-      // 현재 방향과 반대 방향으로는 변경 불가
-      setSnakeData((prevData) => {
-        const currentDirection = prevData[nickname].direction;
-        if (
-          (currentDirection === "UP" && newDirection === "DOWN") ||
-          (currentDirection === "DOWN" && newDirection === "UP") ||
-          (currentDirection === "LEFT" && newDirection === "RIGHT") ||
-          (currentDirection === "RIGHT" && newDirection === "LEFT")
+      setGameState((prev) => {
+        const newSnakes = { ...prev.snakes };
+        if (e.key === "ArrowUp" && newSnakes.눈송이.direction !== "DOWN") {
+          newSnakes.눈송이.direction = "UP";
+        } else if (
+          e.key === "ArrowDown" &&
+          newSnakes.눈송이.direction !== "UP"
         ) {
-          return prevData;
+          newSnakes.눈송이.direction = "DOWN";
+        } else if (
+          e.key === "ArrowLeft" &&
+          newSnakes.눈송이.direction !== "RIGHT"
+        ) {
+          newSnakes.눈송이.direction = "LEFT";
+        } else if (
+          e.key === "ArrowRight" &&
+          newSnakes.눈송이.direction !== "LEFT"
+        ) {
+          newSnakes.눈송이.direction = "RIGHT";
+        } else if (e.key === "w" && newSnakes.눈결.direction !== "DOWN") {
+          newSnakes.눈결.direction = "UP";
+        } else if (e.key === "s" && newSnakes.눈결.direction !== "UP") {
+          newSnakes.눈결.direction = "DOWN";
+        } else if (e.key === "a" && newSnakes.눈결.direction !== "RIGHT") {
+          newSnakes.눈결.direction = "LEFT";
+        } else if (e.key === "d" && newSnakes.눈결.direction !== "LEFT") {
+          newSnakes.눈결.direction = "RIGHT";
         }
-        // 소켓을 통해 방향 변경 전송
-        if (socket) {
-          socket.emit("playerMove", { direction: newDirection });
-        }
-        return {
-          ...prevData,
-          [nickname]: { ...prevData[nickname], direction: newDirection },
-        };
+        return { ...prev, snakes: newSnakes };
       });
     };
 
@@ -258,82 +188,39 @@ const SnakeGame = ({ roomId, nickname }) => {
       cancelAnimationFrame(animationRef.current);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [settings, food, participants, nickname, socket]);
+  }, [gameState, settings]);
 
-  // 소켓으로부터 방향 변경 수신
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on("playerMove", ({ nickname: playerNickname, direction }) => {
-      setSnakeData((prevData) => ({
-        ...prevData,
-        [playerNickname]: {
-          ...prevData[playerNickname],
-          direction,
-        },
-      }));
-    });
-
-    return () => {
-      socket.off("playerMove");
-    };
-  }, [socket]);
-
-  // 설정 변경 함수
-  const handleSettingsChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setSettings((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : parseInt(value),
-    }));
-  };
-
-  // 나가기 함수
   const handleExit = () => {
-    navigate("/lobby");
+    navigate("/");
   };
 
-  // 게임 종료 함수
   const handleGameEnd = () => {
     navigate("/game-results", {
       state: {
-        players: Object.keys(snakeData).map((name) => ({ name, score: 0 })),
+        players: Object.keys(gameState.snakes).map((name) => ({
+          name,
+          score: gameState.snakes[name].score,
+        })),
       },
     });
   };
 
   return (
-    <div className='relative flex flex-col items-center min-h-screen p-6 bg-gray-100'>
-      {/* 나가기 버튼 */}
-      <div className='absolute top-6 left-6'>
+    <div className='relative flex justify-center bg-gray-100'>
+      {/* 왼쪽 버튼 그룹 */}
+      <div className='absolute flex flex-col space-y-4 top-6 left-6'>
         <button
           onClick={handleExit}
           className='px-6 py-3 text-white bg-orange-600 rounded-lg hover:bg-orange-700'
         >
           나가기
         </button>
-      </div>
-
-      {/* 게임 종료 버튼 */}
-      <div className='absolute top-6 right-6'>
         <button
           onClick={handleGameEnd}
           className='px-6 py-3 text-white bg-red-600 rounded-lg hover:bg-red-700'
         >
           게임 종료
         </button>
-      </div>
-
-      {/* 게임 화면 */}
-      <h1 className='mb-4 text-2xl font-bold'>Snake Game</h1>
-      <canvas
-        ref={canvasRef}
-        width={500}
-        height={500}
-        className='border border-gray-300'
-      />
-      <div className='mt-4'>
-        {/* 설정 버튼 */}
         <button
           onClick={() => setSettingsVisible(!settingsVisible)}
           className='px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700'
@@ -342,13 +229,29 @@ const SnakeGame = ({ roomId, nickname }) => {
         </button>
       </div>
 
-      {/* 설정 화면 보이기 */}
-      {settingsVisible && (
-        <SettingsModal
-          settings={settings}
-          handleSettingsChange={handleSettingsChange}
+      {/* 오른쪽 점수판 */}
+      <div className='absolute flex flex-col space-y-4 text-lg font-bold top-6 right-6'>
+        <div className='text-blue-600'>
+          눈송이 점수: {gameState.snakes.눈송이.score}
+        </div>
+        <div className='text-purple-600'>
+          눈결 점수: {gameState.snakes.눈결.score}
+        </div>
+      </div>
+
+      {/* 게임 화면 */}
+      <div className='flex flex-col items-center'>
+        <h1 className='mb-4 text-2xl font-bold'>Snake Game</h1>
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={600}
+          className='border border-gray-300'
         />
-      )}
+      </div>
+
+      {/* 설정 화면 보이기 */}
+      {settingsVisible && <SettingsModal settings={settings} />}
     </div>
   );
 };

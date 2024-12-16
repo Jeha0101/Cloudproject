@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getRoomInfo } from "../services/api";
 import io from "socket.io-client";
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
@@ -8,36 +7,15 @@ const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
 function RoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const [room, setRoom] = useState(null);
   const [nickname, setNickname] = useState(""); // 닉네임 상태
-  const [participants, setParticipants] = useState([]);
+  const [participants, setParticipants] = useState([]); // 참가자 목록
   const [errorMessage, setErrorMessage] = useState("");
   const [socket, setSocket] = useState(null);
+  const [hostNickname, setHostNickname] = useState(""); // 호스트 닉네임
 
   const isHost = localStorage.getItem("hostToken") === roomId; // 호스트 여부 확인
 
   // 방 정보를 로드하는 useEffect
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const data = await getRoomInfo(roomId);
-        setRoom(data);
-        setParticipants(data.players || []);
-
-        // 호스트인 경우 닉네임 자동 설정
-        if (isHost) {
-          setNickname(data.host);
-        }
-      } catch (error) {
-        console.error("Failed to fetch room info:", error);
-        setErrorMessage("방이 삭제되었습니다.");
-        navigate("/lobby"); // 로비로 리다이렉트
-      }
-    }
-    fetchData();
-  }, [roomId, isHost, navigate]);
-
-  // 소켓 초기화 및 이벤트 처리
   useEffect(() => {
     const s = io(SOCKET_URL, { query: { roomId } });
 
@@ -45,16 +23,12 @@ function RoomPage() {
       console.log("Connected to socket server.");
     });
 
-    s.on("playerJoined", (data) => {
-      console.log("Player joined:", data);
-      setParticipants((prev) => [...prev, data]);
+    s.on("participantsUpdated", (updatedParticipants) => {
+      setParticipants(updatedParticipants);
     });
 
-    s.on("playerLeft", (data) => {
-      console.log("Player left:", data);
-      setParticipants((prev) =>
-        prev.filter((p) => p.nickname !== data.nickname)
-      );
+    s.on("hostUpdated", (host) => {
+      setHostNickname(host); // 호스트 닉네임 업데이트
     });
 
     s.on("errorMessage", (msg) => {
@@ -69,62 +43,67 @@ function RoomPage() {
     };
   }, [roomId]);
 
-  // 디버깅용 useEffect
-  useEffect(() => {
-    console.log("Room state updated:", room);
-  }, [room]);
-
-  useEffect(() => {
-    console.log("Participants updated:", participants);
-  }, [participants]);
-
-  function handleAddParticipant() {
+  // 참가자 추가 함수
+  const handleAddParticipant = () => {
     if (!nickname.trim()) {
       setErrorMessage("닉네임을 입력하세요.");
       return;
     }
 
+    // 이미 사용 중인 닉네임 체크
     if (participants.find((p) => p.nickname === nickname)) {
       setErrorMessage("이미 사용 중인 닉네임입니다.");
       return;
     }
 
-    if (participants.length >= 4) {
+    // 최대 4명 참가자 제한
+    if (participants.length >= 3) {
       setErrorMessage("참가자 수가 초과되었습니다.");
       return;
     }
 
-    if (!socket) {
-      console.error("Socket is not connected");
-      setErrorMessage("소켓 연결이 끊어졌습니다.");
-      return;
+    // 참가자 목록 업데이트
+    const newParticipant = { nickname };
+    setParticipants((prevParticipants) => [
+      ...prevParticipants,
+      newParticipant,
+    ]);
+
+    setNickname(""); // 닉네임 초기화
+    setErrorMessage(""); // 에러 메시지 초기화
+
+    // 서버로 참가자 추가 요청
+    if (socket) {
+      socket.emit("addParticipant", { nickname, roomId }, (response) => {
+        if (response.success) {
+          setErrorMessage("");
+          console.log(`${nickname} 참가 성공`);
+        } else {
+          console.error("Failed to add participant:", response.error);
+          setErrorMessage(response.error || "참가 중 오류가 발생했습니다.");
+        }
+      });
     }
+  };
 
-    console.log("Emitting addParticipant event...", { nickname, roomId });
-    socket.emit("addParticipant", { nickname, roomId }, (response) => {
-      console.log("addParticipant response:", response);
-      if (response.success) {
-        setErrorMessage("");
-        console.log(`${nickname} 참가 성공`);
-      } else {
-        console.error("Failed to add participant:", response.error);
-        setErrorMessage(response.error || "참가 중 오류가 발생했습니다.");
-      }
-    });
-  }
+  // 게임 시작
+  const handleStartGame = () => {
+    console.log("Starting game for room:", roomId, "Is Host:", isHost);
 
-  function handleStartGame() {
     if (isHost) {
-      navigate(`/game/${roomId}`);
+      console.log("Navigating to game page...");
+      navigate(`/game/${roomId}`, { state: { roomId } });
+    } else {
+      setErrorMessage("호스트만 게임을 시작할 수 있습니다.");
     }
-  }
+  };
 
   return (
     <div className='min-h-screen p-6 bg-gray-100'>
       <div className='max-w-4xl p-6 mx-auto bg-white rounded-lg shadow-md'>
         {/* 나가기 버튼 */}
         <button
-          onClick={() => navigate("/lobby")}
+          onClick={() => navigate("/")}
           className='px-4 py-2 mb-4 text-white bg-indigo-600 rounded-md hover:bg-indigo-700'
         >
           나가기
@@ -134,30 +113,27 @@ function RoomPage() {
           대기실: {roomId}
         </h1>
 
-        {room ? (
-          <div className='mb-6 space-y-4'>
-            <div>
-              <p className='text-lg font-medium'>
-                <span className='text-indigo-500'>호스트:</span> {room.host}
-              </p>
-            </div>
-            <div>
-              <p className='text-lg font-medium'>
-                <span className='text-indigo-500'>참가자:</span>{" "}
-                {participants.map((p, index) => (
-                  <span key={index}>
-                    {p.nickname}
-                    {index < participants.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </p>
-            </div>
+        <div className='mb-6 space-y-4'>
+          <div>
+            <p className='text-lg font-medium'>
+              <span className='text-indigo-500'>호스트:</span>{" "}
+              {hostNickname || "눈송이"}
+            </p>
           </div>
-        ) : (
-          <p className='text-center text-gray-500'>방 정보를 불러오는 중...</p>
-        )}
+          <div>
+            <p className='text-lg font-medium'>
+              <span className='text-indigo-500'>참가자:</span> <span></span>
+              {participants.map((p, index) => (
+                <span key={index}>
+                  {p.nickname}
+                  {index < participants.length - 1 ? "   " : ""}
+                </span>
+              ))}
+            </p>
+          </div>
+        </div>
 
-        {/* 참가자 수 초과 또는 기타 에러 메시지 */}
+        {/* 에러 메시지 */}
         {errorMessage && (
           <p className='mt-4 text-center text-red-500'>{errorMessage}</p>
         )}

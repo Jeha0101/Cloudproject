@@ -30,7 +30,7 @@ const GameResultsPage = () => {
 
         <div className='flex justify-center mt-6'>
           <button
-            onClick={() => navigate("/lobby")}
+            onClick={() => navigate("/")}
             className='px-8 py-3 text-lg font-semibold text-white transition duration-300 bg-orange-600 rounded-lg hover:bg-orange-700'
           >
             로비로 돌아가기
