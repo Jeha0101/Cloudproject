@@ -3,7 +3,7 @@ import { createRoom, fetchRooms } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://backend-sevice:5000";
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
 
 function LobbyPage() {
   const [nickname, setNickname] = useState("");
