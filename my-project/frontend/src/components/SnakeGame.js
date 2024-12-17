@@ -14,7 +14,7 @@ const SnakeGame = ({ roomId, nickname }) => {
 
   useEffect(() => {
     // Socket.io 연결
-    const newSocket = io('http://localhost:5000', { query: { roomId, nickname } });
+    const newSocket = io('http://backend-service:5000', { query: { roomId, nickname } });
     setSocket(newSocket);
 
     newSocket.on('playerJoined', (data) => {

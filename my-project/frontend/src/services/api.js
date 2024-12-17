@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:5000/api'; // 백엔드 URL
+const BASE_URL = 'http://backend-service:5000/api'; // 백엔드 URL
 
 // 방 생성
 export async function createRoom(nickname) {

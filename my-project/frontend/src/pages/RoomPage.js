@@ -20,7 +20,7 @@ function RoomPage() {
 
   useEffect(() => {
     // 대기실 입장 시 소켓 연결
-    const s = io('http://localhost:5000', {
+    const s = io('http://backend-service:5000', {
       query: { roomId, nickname }
     });
     s.on('gameStart', () => {

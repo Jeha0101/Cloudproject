@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  DATABASE_URL: "mongodb://db-service:27017/mydatabase"
+  PORT: "5000"

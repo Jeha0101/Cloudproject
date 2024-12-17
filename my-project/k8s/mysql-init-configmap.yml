@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-sql
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS mydb;
+
+    USE mydb;
+
+    CREATE TABLE IF NOT EXISTS rooms (
+        id VARCHAR(255) NOT NULL PRIMARY KEY,
+        host VARCHAR(255) NOT NULL,
+        players JSON NOT NULL
+    );
