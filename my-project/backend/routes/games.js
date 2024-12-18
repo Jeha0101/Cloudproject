@@ -84,7 +84,15 @@ module.exports = (io) => {
             res.status(500).json({ error: '게임 상태 조회에 실패했습니다.' });
         }
     });
-
+    /**
+         * 타이머 정지 함수
+         */
+        function stopGameTimer(roomId) {
+            if (gameTimers.has(roomId)) {
+                clearInterval(gameTimers.get(roomId).timer);
+                gameTimers.delete(roomId);
+            }
+        }
     /**
      * 타이머 시작 함수
      */
@@ -121,15 +129,7 @@ module.exports = (io) => {
         gameTimers.set(roomId, { timer, timeLeft });
     }
 
-    /**
-     * 타이머 정지 함수
-     */
-    function stopGameTimer(roomId) {
-        if (gameTimers.has(roomId)) {
-            clearInterval(gameTimers.get(roomId).timer);
-            gameTimers.delete(roomId);
-        }
-    }
+    
 
     return router;
 }; 
