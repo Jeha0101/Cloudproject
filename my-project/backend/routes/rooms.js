@@ -25,7 +25,24 @@ module.exports = (io) => {
             res.status(500).json({ error: '방 생성에 실패했습니다.' });
         }
     });
-
+    // 특정 방 조회
+        router.get('/rooms/:roomId', async (req, res) => {
+            try {
+                const [rows] = await db.query('SELECT * FROM rooms WHERE id = ?', [req.params.roomId]);
+                if (rows.length > 0) {
+                    const room = {
+                        ...rows[0],
+                        players: JSON.parse(rows[0].players)
+                    };
+                    res.json(room);
+                } else {
+                    res.status(404).json({ error: '방을 찾을 수 없습니다.' });
+                }
+            } catch (error) {
+                console.error('방 조회 실패:', error);
+                res.status(500).json({ error: '방 조회에 실패했습니다.' });
+            }
+        });
     // 방 목록 조회
     router.get('/rooms', async (req, res) => {
         try {
@@ -56,24 +73,7 @@ module.exports = (io) => {
         }
     });
 
-    // 특정 방 조회
-    router.get('/rooms/:roomId', async (req, res) => {
-        try {
-            const [rows] = await db.query('SELECT * FROM rooms WHERE id = ?', [req.params.roomId]);
-            if (rows.length > 0) {
-                const room = {
-                    ...rows[0],
-                    players: JSON.parse(rows[0].players)
-                };
-                res.json(room);
-            } else {
-                res.status(404).json({ error: '방을 찾을 수 없습니다.' });
-            }
-        } catch (error) {
-            console.error('방 조회 실패:', error);
-            res.status(500).json({ error: '방 조회에 실패했습니다.' });
-        }
-    });
+    
 
     // 방 참가
     router.post('/rooms/:roomId/join', async (req, res) => {

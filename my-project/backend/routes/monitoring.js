@@ -29,29 +29,6 @@ const logger = winston.createLogger({
     ]
 });
 
-/**
- * 클성 방 통계 API
- * - 현재 활성화된 방 수
- * - 총 사용자 수
- * - 진행 중인 게임 수
- */
-router.get('/stats', async (req, res) => {
-    try {
-        const [roomStats] = await db.query(`
-            SELECT 
-                COUNT(*) as total_rooms,
-                SUM(CASE WHEN status = 'playing' THEN 1 ELSE 0 END) as active_games,
-                COUNT(DISTINCT JSON_UNQUOTE(JSON_EXTRACT(players, '$[*]'))) as total_players
-            FROM rooms
-        `);
-
-        logger.info('방 통계 조회', { stats: roomStats[0] });
-        res.json(roomStats[0]);
-    } catch (error) {
-        logger.error('방 통계 조회 실패', { error });
-        res.status(500).json({ error: '방 통계 조회 실패' });
-    }
-});
 
 /**
  * 에러 로그 조회 API
@@ -96,6 +73,29 @@ router.get('/logs/games', async (req, res) => {
     } catch (error) {
         logger.error('게임 로그 조회 실패', { error });
         res.status(500).json({ error: '게임 로그 조회 실패' });
+    }
+});
+/**
+ * 클성 방 통계 API
+ * - 현재 활성화된 방 수
+ * - 총 사용자 수
+ * - 진행 중인 게임 수
+ */
+router.get('/stats', async (req, res) => {
+    try {
+        const [roomStats] = await db.query(`
+            SELECT 
+                COUNT(*) as total_rooms,
+                SUM(CASE WHEN status = 'playing' THEN 1 ELSE 0 END) as active_games,
+                COUNT(DISTINCT JSON_UNQUOTE(JSON_EXTRACT(players, '$[*]'))) as total_players
+            FROM rooms
+        `);
+
+        logger.info('방 통계 조회', { stats: roomStats[0] });
+        res.json(roomStats[0]);
+    } catch (error) {
+        logger.error('방 통계 조회 실패', { error });
+        res.status(500).json({ error: '방 통계 조회 실패' });
     }
 });
 

@@ -6,15 +6,11 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
+    cors: { 
         origin: "http://localhost:3000",
         methods: ["GET", "POST"]
     }
 });
-
-// 미들웨어
-app.use(cors());
-app.use(express.json());
 
 // Socket.io 이벤트 핸들러
 io.on('connection', (socket) => {
@@ -24,6 +20,12 @@ io.on('connection', (socket) => {
         console.log('Client disconnected:', socket.id);
     });
 });
+
+// 미들웨어
+app.use(cors());
+app.use(express.json());
+
+
 
 // 라우터 설정 (Socket.io 인스턴스 전달)
 const setupRoutes = (io) => {
